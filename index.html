@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D Spinning Metallic Spoon</title>
+  <title>Spoon</title>
   <style>
     body {
       margin: 0;
@@ -14,12 +14,11 @@
       display: block;
     }
   </style>
-  <!-- Import Three.js and extensions from CDN -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://unpkg.com",
-        "three/addons/": "https://unpkg.com"
+        "three": "https://jsdelivr.net",
+        "three/addons/": "https://jsdelivr.net"
       }
     }
   </script>
@@ -50,7 +49,7 @@
   renderer.toneMappingExposure = 1.05;
   document.body.appendChild(renderer.domElement);
 
-  // 4. Studio Environment Map (Provides realistic reflections on the silver spoon)
+  // 4. Studio Environment Map (Realistic metallic reflections)
   const pmremGenerator = new THREE.PMREMGenerator(renderer);
   scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
@@ -60,13 +59,13 @@
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.width = 1024;
   dirLight.shadow.mapSize.height = 1024;
-  dirLight.shadow.radius = 8; // Softens the shadow edges
+  dirLight.shadow.radius = 8;
   scene.add(dirLight);
 
-  // 6. Invisible Floor Plane that Only Catches Shadows
+  // 6. Invisible Floor Plane that Catches Shadows
   const shadowFloor = new THREE.Mesh(
     new THREE.PlaneGeometry(15, 15),
-    new THREE.ShadowMaterial({ opacity: 0.22 }) // Adjust opacity for darker/lighter shadow
+    new THREE.ShadowMaterial({ opacity: 0.22 })
   );
   shadowFloor.rotation.x = -Math.PI / 2;
   shadowFloor.position.y = -1.15;
@@ -75,56 +74,55 @@
 
   // 7. Polished Silver/Steel Metallic Material
   const metallicMaterial = new THREE.MeshStandardMaterial({
-    color: 0xd8dde6,    // Silver/stainless steel tint
-    metalness: 0.96,    // High metalness for mirror-like reflections
-    roughness: 0.14,    // Low roughness for glossy cutlery sheen
+    color: 0xd8dde6,
+    metalness: 0.96,
+    roughness: 0.14,
   });
 
-  // Container group that spins
   const spinGroup = new THREE.Group();
   scene.add(spinGroup);
 
-  // 8. Load Your Spoon Model
+  // 8. Load Spoon.glb
   const loader = new GLTFLoader();
-  loader.load('spoon_8viRR1.glb', (gltf) => {
-    const model = gltf.scene;
+  loader.load(
+    './Spoon.glb',
+    (gltf) => {
+      const model = gltf.scene;
 
-    // Apply metallic material & shadow casting to all meshes
-    model.traverse((child) => {
-      if (child.isMesh) {
-        child.material = metallicMaterial;
-        child.castShadow = true;
-      }
-    });
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.material = metallicMaterial;
+          child.castShadow = true;
+        }
+      });
 
-    // Compute bounding box to normalize scale & center the spoon
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    
-    // Scale the spoon to ~2.8 units long so it fits the viewport cleanly
-    const scaleFactor = 2.8 / maxDim;
-    model.scale.setScalar(scaleFactor);
+      // Normalize scale & center the spoon
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const scaleFactor = 2.8 / maxDim;
+      model.scale.setScalar(scaleFactor);
 
-    // Recompute bounding box after scaling to center it at (0, 0, 0)
-    const scaledBox = new THREE.Box3().setFromObject(model);
-    const center = scaledBox.getCenter(new THREE.Vector3());
-    model.position.sub(center);
+      const scaledBox = new THREE.Box3().setFromObject(model);
+      const center = scaledBox.getCenter(new THREE.Vector3());
+      model.position.sub(center);
 
-    // Slight tilt so the spoon bowl catches studio highlights nicely as it spins
-    model.rotation.z = Math.PI * 0.12;
-    model.rotation.x = Math.PI * 0.08;
+      // Slight tilt to catch reflections
+      model.rotation.z = Math.PI * 0.12;
+      model.rotation.x = Math.PI * 0.08;
 
-    spinGroup.add(model);
-  });
+      spinGroup.add(model);
+    },
+    undefined,
+    (error) => {
+      console.error('Error loading Spoon.glb:', error);
+    }
+  );
 
-  // 9. Animation Loop (Spins the spoon, camera stays stationary)
+  // 9. Animation Loop
   function animate() {
     requestAnimationFrame(animate);
-    
-    // Slowly rotate the spoon around its vertical axis
     spinGroup.rotation.y += 0.008;
-
     renderer.render(scene, camera);
   }
   animate();
