@@ -38,21 +38,23 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 // SETTINGS
 const ROTATION_SPEED = 0.001;
 const MODEL_SIZE = 2.0;
-const CAMERA_MARGIN = 1.5;
+const CAMERA_MARGIN = 2.5;
+const CAMERA_HEIGHT = 12;
 
 // SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
-// CAMERA
+// CAMERA - TOP DOWN
 const camera = new THREE.PerspectiveCamera(
   45,
   window.innerWidth / window.innerHeight,
   0.01,
-  1000
+  2000
 );
 
-camera.position.set(0, 0, 5);
+camera.position.set(0, CAMERA_HEIGHT, 0);
+camera.up.set(0, 0, -1);
 camera.lookAt(0, 0, 0);
 
 // RENDERER
@@ -84,14 +86,13 @@ pmremGenerator.dispose();
 
 // LIGHTING
 const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
-
-dirLight.position.set(2, 6, 3);
+dirLight.position.set(2, 8, 3);
 dirLight.castShadow = true;
 dirLight.shadow.mapSize.set(2048, 2048);
 
 scene.add(dirLight);
 
-// MATERIAL
+// METALLIC MATERIAL
 const metallicMaterial = new THREE.MeshStandardMaterial({
   color: 0xd8dde6,
   metalness: 0.96,
@@ -102,7 +103,7 @@ const metallicMaterial = new THREE.MeshStandardMaterial({
 const spinGroup = new THREE.Group();
 scene.add(spinGroup);
 
-// LOAD MODEL
+// LOAD SPOON
 const loader = new GLTFLoader();
 
 loader.load(
@@ -119,7 +120,7 @@ loader.load(
       }
     });
 
-    // Find original dimensions
+    // Calculate original dimensions
     const originalBox = new THREE.Box3().setFromObject(model);
     const originalSize = originalBox.getSize(new THREE.Vector3());
 
@@ -130,7 +131,7 @@ loader.load(
     );
 
     if (!Number.isFinite(maxDim) || maxDim <= 0) {
-      console.error('Invalid model dimensions');
+      console.error('Invalid spoon dimensions');
       return;
     }
 
@@ -143,48 +144,44 @@ loader.load(
 
     model.position.sub(center);
 
-    // Add model to rotating group
+    // Add model
     spinGroup.add(model);
 
-    // Calculate actual model dimensions
-    const finalBox = new THREE.Box3().setFromObject(spinGroup);
-    const finalSize = finalBox.getSize(new THREE.Vector3());
+    // Calculate model size
+    const box = new THREE.Box3().setFromObject(spinGroup);
+    const size = box.getSize(new THREE.Vector3());
 
-    // Calculate camera distance to fit model
+    // Calculate camera distance for top-down view
+    const maxSize = Math.max(size.x, size.z);
+
     const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+
     const horizontalFov = 2 * Math.atan(
       Math.tan(verticalFov / 2) * camera.aspect
     );
 
-    const verticalDistance =
-      finalSize.y / (2 * Math.tan(verticalFov / 2));
-
-    const horizontalDistance =
-      finalSize.x / (2 * Math.tan(horizontalFov / 2));
-
     const distance = Math.max(
-      verticalDistance,
-      horizontalDistance,
-      finalSize.z / 2
+      maxSize / (2 * Math.tan(verticalFov / 2)),
+      maxSize / (2 * Math.tan(horizontalFov / 2))
     ) * CAMERA_MARGIN;
 
-    // Position camera
-    camera.position.set(0, 0, distance);
-    camera.lookAt(0, 0, 0);
+    // Keep camera directly above model
+    camera.position.set(
+      0,
+      Math.max(CAMERA_HEIGHT, distance),
+      0
+    );
 
-    camera.near = Math.max(0.001, distance / 100);
-    camera.far = distance * 100;
+    camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
 
-    console.log('Spoon loaded!');
-    console.log('Model size:', finalSize);
-    console.log('Camera distance:', distance);
+    console.log('Spoon loaded successfully!');
   },
 
   undefined,
 
   (error) => {
-    console.error('Could not load Spoon.glb:', error);
+    console.error('Error loading Spoon.glb:', error);
   }
 );
 
