@@ -153,7 +153,7 @@ loader.load(
     const scaledBox = new THREE.Box3().setFromObject(model);
     const center = scaledBox.getCenter(new THREE.Vector3());
 
-    model.position.sub(center);
+    model.position.set(-center.x, -center.y, -center.z);
 
     // Slight tilt
     // Correct spoon orientation
@@ -182,7 +182,7 @@ loader.load(
 function animate() {
   requestAnimationFrame(animate);
 
-  spinGroup.rotation.y += 0.002;
+  spinGroup.rotation.y += 0.001;
 
   renderer.render(scene, camera);
 }
