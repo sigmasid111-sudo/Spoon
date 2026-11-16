@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Spoon</title>
 
   <style>
@@ -12,6 +12,7 @@
       overflow: hidden;
       background: black;
       cursor: grab;
+      touch-action: none;
     }
 
     body:active {
@@ -20,6 +21,7 @@
 
     canvas {
       display: block;
+      touch-action: none;
     }
   </style>
 
@@ -54,9 +56,11 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1;
 document.body.appendChild(renderer.domElement);
 
-// Environment reflections
+// Reflections
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = pmrem.fromScene(
+  new RoomEnvironment(), 0.04
+).texture;
 
 // Lighting
 scene.add(new THREE.AmbientLight(0xffffff, 1));
@@ -69,7 +73,7 @@ const light2 = new THREE.DirectionalLight(0xffffff, 2);
 light2.position.set(-5, 2, -5);
 scene.add(light2);
 
-// Rotation groups
+// Rotation group
 const rotationGroup = new THREE.Group();
 scene.add(rotationGroup);
 
@@ -79,7 +83,7 @@ rotationGroup.rotation.set(
   THREE.MathUtils.degToRad(90)
 );
 
-// Load model
+// Load spoon
 const loader = new GLTFLoader();
 
 loader.load(
@@ -87,7 +91,6 @@ loader.load(
   (gltf) => {
     const model = gltf.scene;
 
-    // Apply silver material
     model.traverse((child) => {
       if (child.isMesh) {
         child.material = new THREE.MeshStandardMaterial({
@@ -98,73 +101,171 @@ loader.load(
       }
     });
 
-    // Calculate model bounds
     model.updateMatrixWorld(true);
+
     const box = new THREE.Box3().setFromObject(model);
     const centre = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-
     const maxDimension = Math.max(size.x, size.y, size.z);
 
     if (!Number.isFinite(maxDimension) || maxDimension === 0) {
-      console.error("Spoon model has invalid dimensions.");
+      console.error("Invalid spoon dimensions");
       return;
     }
 
-    // Centre model without changing its original geometry
     const modelHolder = new THREE.Group();
     modelHolder.add(model);
     model.position.sub(centre);
-
     modelHolder.scale.setScalar(3.5 / maxDimension);
-    rotationGroup.add(modelHolder);
 
-    console.log("Spoon loaded successfully!");
+    rotationGroup.add(modelHolder);
+    console.log("Spoon loaded!");
   },
   undefined,
-  (error) => {
-    console.error("Failed to load ./spoon.glb:", error);
-  }
+  (error) => console.error("Failed to load spoon.glb:", error)
 );
 
-// Click and drag rotation
+// Drag momentum
 let dragging = false;
 let previousX = 0;
 let previousY = 0;
 
+let velocityX = 0;
+let velocityY = 0;
+
+const FRICTION = 0.94;
+const ROTATION_SENSITIVITY = 0.008;
+const MAX_SPEED = 0.15;
+
+const activePointers = new Map();
+
 renderer.domElement.addEventListener("pointerdown", (event) => {
-  dragging = true;
-  previousX = event.clientX;
-  previousY = event.clientY;
+  activePointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY
+  });
+
+  if (activePointers.size === 1) {
+    dragging = true;
+    previousX = event.clientX;
+    previousY = event.clientY;
+    velocityX = 0;
+    velocityY = 0;
+  }
+
   renderer.domElement.setPointerCapture(event.pointerId);
 });
 
 renderer.domElement.addEventListener("pointermove", (event) => {
-  if (!dragging) return;
+  if (!activePointers.has(event.pointerId)) return;
 
-  const dx = event.clientX - previousX;
-  const dy = event.clientY - previousY;
+  const previousPointer = activePointers.get(event.pointerId);
 
-  rotationGroup.rotation.y += dx * 0.01;
-  rotationGroup.rotation.x += dy * 0.01;
+  activePointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY
+  });
 
-  previousX = event.clientX;
-  previousY = event.clientY;
+  // Two-finger pinch zoom
+  if (activePointers.size === 2) {
+    const pointers = [...activePointers.values()];
+
+    const oldOther = [...activePointers.entries()]
+      .find(([id]) => id !== event.pointerId)[1];
+
+    const oldDistance = Math.hypot(
+      previousPointer.x - oldOther.x,
+      previousPointer.y - oldOther.y
+    );
+
+    const newDistance = Math.hypot(
+      event.clientX - oldOther.x,
+      event.clientY - oldOther.y
+    );
+
+    if (oldDistance > 0) {
+      const zoomChange = oldDistance - newDistance;
+
+      camera.position.z += zoomChange * 0.025;
+      camera.position.z = THREE.MathUtils.clamp(
+        camera.position.z, 4, 25
+      );
+    }
+
+    dragging = false;
+    velocityX = 0;
+    velocityY = 0;
+    return;
+  }
+
+  // One-finger / mouse rotation
+  if (activePointers.size === 1) {
+    const dx = event.clientX - previousX;
+    const dy = event.clientY - previousY;
+
+    velocityX = THREE.MathUtils.clamp(
+      dx * ROTATION_SENSITIVITY, -MAX_SPEED, MAX_SPEED
+    );
+
+    velocityY = THREE.MathUtils.clamp(
+      dy * ROTATION_SENSITIVITY, -MAX_SPEED, MAX_SPEED
+    );
+
+    rotationGroup.rotation.y += velocityX;
+    rotationGroup.rotation.x += velocityY;
+
+    previousX = event.clientX;
+    previousY = event.clientY;
+    dragging = true;
+  }
 });
 
-renderer.domElement.addEventListener("pointerup", () => {
-  dragging = false;
-});
+function removePointer(event) {
+  activePointers.delete(event.pointerId);
 
-renderer.domElement.addEventListener("pointercancel", () => {
-  dragging = false;
-});
+  if (activePointers.size === 0) {
+    dragging = false;
+  } else if (activePointers.size === 1) {
+    const remaining = [...activePointers.values()][0];
+    previousX = remaining.x;
+    previousY = remaining.y;
+    dragging = true;
+    velocityX = 0;
+    velocityY = 0;
+  }
+}
 
-// Render without automatic rotation
+renderer.domElement.addEventListener("pointerup", removePointer);
+renderer.domElement.addEventListener("pointercancel", removePointer);
+
+// Mouse wheel zoom
+renderer.domElement.addEventListener("wheel", (event) => {
+  event.preventDefault();
+
+  camera.position.z += event.deltaY * 0.008;
+  camera.position.z = THREE.MathUtils.clamp(
+    camera.position.z, 4, 25
+  );
+}, { passive: false });
+
+// Animation
 function animate() {
   requestAnimationFrame(animate);
+
+  if (!dragging) {
+    rotationGroup.rotation.y += velocityX;
+    rotationGroup.rotation.x += velocityY;
+
+    velocityX *= FRICTION;
+    velocityY *= FRICTION;
+
+    if (Math.abs(velocityX) < 0.0001) velocityX = 0;
+    if (Math.abs(velocityY) < 0.0001) velocityY = 0;
+  }
+
   renderer.render(scene, camera);
 }
+
 animate();
 
 // Resize
