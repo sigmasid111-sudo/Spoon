@@ -7,87 +7,15 @@
 <title>Spoon</title>
 
 <style>
-* {
-  box-sizing: border-box;
-}
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #000;
+  }
 
-body {
-  margin: 0;
-  overflow: hidden;
-  background: black;
-  font-family: Arial, sans-serif;
-}
-
-canvas {
-  position: fixed;
-  inset: 0;
-  display: block;
-  z-index: 0;
-}
-
-#controls {
-  position: fixed;
-  top: 15px;
-  left: 15px;
-  width: 260px;
-  padding: 18px;
-  color: white;
-  background: rgba(20, 20, 25, 0.95);
-  border: 2px solid #888;
-  border-radius: 12px;
-  z-index: 9999;
-}
-
-#controls h2 {
-  margin: 0 0 18px;
-  font-size: 20px;
-}
-
-.slider {
-  margin-bottom: 18px;
-}
-
-.slider label {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 14px;
-}
-
-input[type="range"] {
-  width: 100%;
-  accent-color: #55aaff;
-  cursor: pointer;
-}
-
-button {
-  width: 100%;
-  padding: 10px;
-  margin-top: 8px;
-  color: white;
-  background: #333;
-  border: 1px solid #888;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #555;
-}
-
-#toggleControls {
-  position: fixed;
-  top: 15px;
-  right: 15px;
-  width: auto;
-  padding: 12px 18px;
-  z-index: 10000;
-  background: #222;
-}
-
-#controls.hidden {
-  display: none;
-}
+  canvas {
+    display: block;
+  }
 </style>
 
 <script type="importmap">
@@ -102,29 +30,6 @@ button:hover {
 
 <body>
 
-<div id="controls">
-  <h2>Spoon Rotation</h2>
-
-  <div class="slider">
-    <label>X Rotation <span id="xValue">-90°</span></label>
-    <input id="rotationX" type="range" min="-180" max="180" value="-90">
-  </div>
-
-  <div class="slider">
-    <label>Y Rotation <span id="yValue">-90°</span></label>
-    <input id="rotationY" type="range" min="-180" max="180" value="-90">
-  </div>
-
-  <div class="slider">
-    <label>Z Rotation <span id="zValue">90°</span></label>
-    <input id="rotationZ" type="range" min="-180" max="180" value="90">
-  </div>
-
-  <button id="resetButton">Reset Rotation</button>
-</div>
-
-<button id="toggleControls">Hide Controls</button>
-
 <script type="module">
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -135,9 +40,10 @@ const ROTATION_SPEED = 0.01;
 const MODEL_SIZE = 3.5;
 const CAMERA_DISTANCE = 8;
 
-const DEFAULT_X = -90;
-const DEFAULT_Y = -90;
-const DEFAULT_Z = 90;
+// STARTING ROTATION
+const SPOON_ROTATION_X = -90;
+const SPOON_ROTATION_Y = -90;
+const SPOON_ROTATION_Z = 90;
 
 // SCENE
 const scene = new THREE.Scene();
@@ -167,7 +73,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
 
-// REFLECTIONS
+// REFLECTION ENVIRONMENT
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 const environment = new RoomEnvironment();
 
@@ -191,66 +97,21 @@ scene.add(rimLight);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-// GROUPS
+// SPIN GROUP
 const spinGroup = new THREE.Group();
 scene.add(spinGroup);
 
-// This group controls the spoon's starting orientation.
-const rotationGroup = new THREE.Group();
-spinGroup.add(rotationGroup);
+// ORIENTATION GROUP
+const orientationGroup = new THREE.Group();
+orientationGroup.rotation.set(
+  THREE.MathUtils.degToRad(SPOON_ROTATION_X),
+  THREE.MathUtils.degToRad(SPOON_ROTATION_Y),
+  THREE.MathUtils.degToRad(SPOON_ROTATION_Z)
+);
 
-let spoonModel = null;
+spinGroup.add(orientationGroup);
 
-// SLIDERS
-const sliderX = document.getElementById("rotationX");
-const sliderY = document.getElementById("rotationY");
-const sliderZ = document.getElementById("rotationZ");
-
-function updateRotation() {
-  const x = Number(sliderX.value);
-  const y = Number(sliderY.value);
-  const z = Number(sliderZ.value);
-
-  document.getElementById("xValue").textContent = x + "°";
-  document.getElementById("yValue").textContent = y + "°";
-  document.getElementById("zValue").textContent = z + "°";
-
-  rotationGroup.rotation.set(
-    THREE.MathUtils.degToRad(x),
-    THREE.MathUtils.degToRad(y),
-    THREE.MathUtils.degToRad(z)
-  );
-}
-
-sliderX.addEventListener("input", updateRotation);
-sliderY.addEventListener("input", updateRotation);
-sliderZ.addEventListener("input", updateRotation);
-
-// RESET
-document.getElementById("resetButton").addEventListener("click", () => {
-  sliderX.value = DEFAULT_X;
-  sliderY.value = DEFAULT_Y;
-  sliderZ.value = DEFAULT_Z;
-  updateRotation();
-});
-
-// SHOW / HIDE CONTROLS
-const controls = document.getElementById("controls");
-const toggleButton = document.getElementById("toggleControls");
-
-toggleButton.addEventListener("click", () => {
-  controls.classList.toggle("hidden");
-
-  toggleButton.textContent =
-    controls.classList.contains("hidden")
-      ? "Show Controls"
-      : "Hide Controls";
-});
-
-// INITIAL ROTATION
-updateRotation();
-
-// LOAD MODEL
+// LOAD SPOON
 const loader = new GLTFLoader();
 
 loader.load(
@@ -259,6 +120,7 @@ loader.load(
   (gltf) => {
     const model = gltf.scene;
 
+    // SILVER MATERIAL
     const silverMaterial = new THREE.MeshStandardMaterial({
       color: 0xd8dde6,
       metalness: 0.96,
@@ -274,41 +136,53 @@ loader.load(
       }
     });
 
-    // Calculate the original model bounds BEFORE rotation.
-    model.updateMatrixWorld(true);
+    // PLACE MODEL IN A CENTRING GROUP
+    const modelHolder = new THREE.Group();
+    modelHolder.add(model);
 
-    let box = new THREE.Box3().setFromObject(model);
+    // MEASURE MODEL
+    modelHolder.updateMatrixWorld(true);
+
+    let box = new THREE.Box3().setFromObject(modelHolder);
     const size = box.getSize(new THREE.Vector3());
 
     const maxDimension = Math.max(size.x, size.y, size.z);
-    const scale = MODEL_SIZE / maxDimension;
 
-    // Scale the model.
-    model.scale.multiplyScalar(scale);
+    // SCALE
+    modelHolder.scale.setScalar(MODEL_SIZE / maxDimension);
 
-    // Recalculate bounds after scaling.
-    model.updateMatrixWorld(true);
-    box = new THREE.Box3().setFromObject(model);
+    // RECALCULATE BOUNDS AFTER SCALING
+    modelHolder.updateMatrixWorld(true);
 
-    // Move the model's centre to the origin.
+    box = new THREE.Box3().setFromObject(modelHolder);
+
+    // CENTRE MODEL
     const center = box.getCenter(new THREE.Vector3());
 
-    model.position.x -= center.x;
-    model.position.y -= center.y;
-    model.position.z -= center.z;
+    model.position.sub(center);
 
-    // Add the centred model to the rotation group.
-    spoonModel = model;
-    rotationGroup.add(model);
+    // ADD TO SCENE
+    orientationGroup.add(modelHolder);
 
-    console.log("Spoon loaded and centred!");
-    console.log("Original dimensions:", size);
+    // Recalculate and correct centring after adding
+    modelHolder.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(modelHolder);
+
+    const finalCenter = box.getCenter(new THREE.Vector3());
+    modelHolder.position.sub(finalCenter);
+
+    console.log("Spoon loaded!");
+    console.log("Starting rotation:", 
+      SPOON_ROTATION_X,
+      SPOON_ROTATION_Y,
+      SPOON_ROTATION_Z
+    );
   },
 
   undefined,
 
   (error) => {
-    console.error("Spoon loading error:", error);
+    console.error("Could not load spoon.glb:", error);
   }
 );
 
@@ -316,7 +190,7 @@ loader.load(
 function animate() {
   requestAnimationFrame(animate);
 
-  // Spin around the vertical axis.
+  // Spin around vertical axis
   spinGroup.rotation.y += ROTATION_SPEED;
 
   renderer.render(scene, camera);
@@ -328,6 +202,7 @@ animate();
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
