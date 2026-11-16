@@ -18,7 +18,6 @@
     }
   </style>
 
-  <!-- Fixed Three.js imports -->
   <script type="importmap">
   {
     "imports": {
@@ -36,11 +35,16 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// 1. Scene
+// SETTINGS
+const ROTATION_SPEED = 0.001;
+const MODEL_SIZE = 4.0;
+const CAMERA_DISTANCE = 2.8;
+
+// 1. SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
-// 2. Camera
+// 2. CAMERA - STRAIGHT ON
 const camera = new THREE.PerspectiveCamera(
   45,
   window.innerWidth / window.innerHeight,
@@ -48,10 +52,10 @@ const camera = new THREE.PerspectiveCamera(
   100
 );
 
-camera.position.set(0, 0, 2.8);
+camera.position.set(0, 0, CAMERA_DISTANCE);
 camera.lookAt(0, 0, 0);
 
-// 3. Renderer
+// 3. RENDERER
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
   alpha: false
@@ -65,21 +69,20 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
-
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
 
-// 4. Environment reflections
+// 4. ENVIRONMENT REFLECTIONS
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
-
 const environment = new RoomEnvironment();
+
 scene.environment = pmremGenerator.fromScene(environment).texture;
 
 environment.dispose();
 pmremGenerator.dispose();
 
-// 5. Lighting
+// 5. LIGHTING
 const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
 
 dirLight.position.set(2, 6, 3);
@@ -94,30 +97,30 @@ dirLight.shadow.bias = -0.0001;
 
 scene.add(dirLight);
 
-// 6. Shadow floor
+// 6. FLOOR
 const shadowFloor = new THREE.Mesh(
   new THREE.PlaneGeometry(15, 15),
   new THREE.ShadowMaterial({ opacity: 0.22 })
 );
 
 shadowFloor.rotation.x = -Math.PI / 2;
-shadowFloor.position.y = -1.15;
+shadowFloor.position.y = -3;
 shadowFloor.receiveShadow = true;
 
 scene.add(shadowFloor);
 
-// 7. Metallic material
+// 7. METALLIC MATERIAL
 const metallicMaterial = new THREE.MeshStandardMaterial({
   color: 0xd8dde6,
   metalness: 0.96,
   roughness: 0.14
 });
 
-// 8. Spoon group
+// 8. SPIN GROUP
 const spinGroup = new THREE.Group();
 scene.add(spinGroup);
 
-// 9. Load model
+// 9. LOAD SPOON
 const loader = new GLTFLoader();
 
 loader.load(
@@ -134,31 +137,32 @@ loader.load(
       }
     });
 
-    // Calculate original dimensions
+    // Calculate model dimensions
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
 
     const maxDim = Math.max(size.x, size.y, size.z);
 
     if (maxDim === 0) {
-      console.error('Spoon model has invalid dimensions.');
+      console.error('Invalid spoon dimensions');
       return;
     }
 
     // Scale model
-    const scaleFactor = 2.8 / maxDim;
+    const scaleFactor = MODEL_SIZE / maxDim;
     model.scale.setScalar(scaleFactor);
 
     // Centre model
     const scaledBox = new THREE.Box3().setFromObject(model);
     const center = scaledBox.getCenter(new THREE.Vector3());
 
-    model.position.set(-center.x, -center.y, -center.z);
+    model.position.set(
+      -center.x,
+      -center.y,
+      -center.z
+    );
 
-    // Slight tilt
-    // Correct spoon orientation
-    model.rotation.set(Math.PI / 2, 0, Math.PI / 2);
-
+    // Add spoon
     spinGroup.add(model);
 
     console.log('Spoon loaded successfully!');
@@ -167,7 +171,7 @@ loader.load(
   (progress) => {
     if (progress.total > 0) {
       console.log(
-        'Loading spoon:',
+        'Loading:',
         Math.round(progress.loaded / progress.total * 100) + '%'
       );
     }
@@ -178,24 +182,25 @@ loader.load(
   }
 );
 
-// 10. Animation
+// 10. ANIMATION
 function animate() {
   requestAnimationFrame(animate);
 
-  spinGroup.rotation.y += 0.001;
+  spinGroup.rotation.y += ROTATION_SPEED;
 
   renderer.render(scene, camera);
 }
 
 animate();
 
-// 11. Window resizing
+// 11. WINDOW RESIZE
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
 </script>
 
 </body>
