@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Spinning Metallic Spoon</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #ffffff;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+  <!-- Import Three.js and extensions from CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com",
+        "three/addons/": "https://unpkg.com"
+      }
+    }
+  </script>
+</head>
+<body>
+
+<script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+  // 1. Scene & Pure White Background
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
+
+  // 2. Stationary Camera
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 1.4, 4.8);
+  camera.lookAt(0, -0.1, 0);
+
+  // 3. Renderer with Soft Shadows & Filmic Tone Mapping
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  document.body.appendChild(renderer.domElement);
+
+  // 4. Studio Environment Map (Provides realistic reflections on the silver spoon)
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
+  // 5. Overhead Light for the Drop Shadow
+  const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+  dirLight.position.set(2, 6, 3);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 1024;
+  dirLight.shadow.mapSize.height = 1024;
+  dirLight.shadow.radius = 8; // Softens the shadow edges
+  scene.add(dirLight);
+
+  // 6. Invisible Floor Plane that Only Catches Shadows
+  const shadowFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(15, 15),
+    new THREE.ShadowMaterial({ opacity: 0.22 }) // Adjust opacity for darker/lighter shadow
+  );
+  shadowFloor.rotation.x = -Math.PI / 2;
+  shadowFloor.position.y = -1.15;
+  shadowFloor.receiveShadow = true;
+  scene.add(shadowFloor);
+
+  // 7. Polished Silver/Steel Metallic Material
+  const metallicMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd8dde6,    // Silver/stainless steel tint
+    metalness: 0.96,    // High metalness for mirror-like reflections
+    roughness: 0.14,    // Low roughness for glossy cutlery sheen
+  });
+
+  // Container group that spins
+  const spinGroup = new THREE.Group();
+  scene.add(spinGroup);
+
+  // 8. Load Your Spoon Model
+  const loader = new GLTFLoader();
+  loader.load('spoon_8viRR1.glb', (gltf) => {
+    const model = gltf.scene;
+
+    // Apply metallic material & shadow casting to all meshes
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.material = metallicMaterial;
+        child.castShadow = true;
+      }
+    });
+
+    // Compute bounding box to normalize scale & center the spoon
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    
+    // Scale the spoon to ~2.8 units long so it fits the viewport cleanly
+    const scaleFactor = 2.8 / maxDim;
+    model.scale.setScalar(scaleFactor);
+
+    // Recompute bounding box after scaling to center it at (0, 0, 0)
+    const scaledBox = new THREE.Box3().setFromObject(model);
+    const center = scaledBox.getCenter(new THREE.Vector3());
+    model.position.sub(center);
+
+    // Slight tilt so the spoon bowl catches studio highlights nicely as it spins
+    model.rotation.z = Math.PI * 0.12;
+    model.rotation.x = Math.PI * 0.08;
+
+    spinGroup.add(model);
+  });
+
+  // 9. Animation Loop (Spins the spoon, camera stays stationary)
+  function animate() {
+    requestAnimationFrame(animate);
+    
+    // Slowly rotate the spoon around its vertical axis
+    spinGroup.rotation.y += 0.008;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // 10. Handle Window Resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
+
+</body>
+</html>
