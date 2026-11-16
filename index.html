@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Spoon</title>
 
   <style>
@@ -11,41 +11,55 @@
       margin: 0;
       overflow: hidden;
       background: #000;
+      cursor: grab;
+      touch-action: none;
       font-family: Arial, sans-serif;
+    }
+
+    body:active {
+      cursor: grabbing;
     }
 
     canvas {
       display: block;
+      touch-action: none;
     }
 
-    #cameraControl {
+    #importPanel {
       position: fixed;
+      top: 20px;
       right: 20px;
-      bottom: 20px;
+      z-index: 10;
       color: white;
       background: #222;
-      padding: 12px 16px;
+      padding: 12px 15px;
       border-radius: 10px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      z-index: 10;
       font-size: 14px;
+      cursor: default;
     }
 
-    #cameraStatus {
-      position: fixed;
-      right: 20px;
-      bottom: 65px;
+    #importButton {
+      display: inline-block;
+      background: #444;
+      padding: 9px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    #importButton:hover {
+      background: #555;
+    }
+
+    #sceneFile {
+      display: none;
+    }
+
+    #status {
       color: #aaa;
       font-size: 12px;
-      z-index: 10;
-    }
-
-    #cameraToggle {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
+      margin-top: 8px;
+      max-width: 200px;
     }
   </style>
 
@@ -61,416 +75,497 @@
 
 <body>
 
-  <div id="cameraStatus">Normal reflections</div>
-
-  <label id="cameraControl">
-    <input type="checkbox" id="cameraToggle">
-    Camera reflection
+<div id="importPanel">
+  **Reflection environment**
+  <br>
+  <label id="importButton" for="sceneFile">
+    Import GLB scene
   </label>
+  <input id="sceneFile" type="file" accept=".glb">
+  <div id="status">Using default reflections</div>
+</div>
 
-  <video id="cameraVideo" autoplay playsinline muted
-    style="display:none"></video>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-  <script type="module">
-    import * as THREE from "three";
-    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-    import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+// Scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
 
-    // SCENE
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000);
+// Camera
+const camera = new THREE.PerspectiveCamera(
+  45,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
 
-    // CAMERA
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+camera.position.set(0, 0, 10);
 
-    camera.position.set(0, 0, 10);
+// Renderer
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: "high-performance"
+});
 
-    // RENDERER
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: "high-performance"
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+document.body.appendChild(renderer.domElement);
+
+// Environment reflections
+const pmrem = new THREE.PMREMGenerator(renderer);
+
+scene.environment = pmrem.fromScene(
+  new RoomEnvironment(),
+  0.04
+).texture;
+
+// Ambient lighting
+scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+
+// Main light
+const keyLight = new THREE.DirectionalLight(0xffffff, 4);
+keyLight.position.set(4, 7, 6);
+keyLight.castShadow = true;
+
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -5;
+keyLight.shadow.camera.right = 5;
+keyLight.shadow.camera.top = 5;
+keyLight.shadow.camera.bottom = -5;
+keyLight.shadow.bias = -0.0002;
+
+scene.add(keyLight);
+
+// Blue fill light
+const fillLight = new THREE.DirectionalLight(0x9ecbff, 2.5);
+fillLight.position.set(-5, 2, 4);
+scene.add(fillLight);
+
+// Rear rim light
+const rimLight = new THREE.DirectionalLight(0xffffff, 5);
+rimLight.position.set(0, 3, -6);
+scene.add(rimLight);
+
+// Studio highlights
+const highlight1 = new THREE.PointLight(0xffffff, 30, 20);
+highlight1.position.set(-3, 4, 5);
+scene.add(highlight1);
+
+const highlight2 = new THREE.PointLight(0x9ecbff, 20, 20);
+highlight2.position.set(4, -2, 3);
+scene.add(highlight2);
+
+// Rotation group
+const rotationGroup = new THREE.Group();
+scene.add(rotationGroup);
+
+// Starting rotation
+rotationGroup.rotation.set(
+  THREE.MathUtils.degToRad(-90),
+  THREE.MathUtils.degToRad(-90),
+  THREE.MathUtils.degToRad(90)
+);
+
+// Spoon material
+const spoonMaterial = new THREE.MeshStandardMaterial({
+  color: 0xe9edf2,
+  metalness: 0.95,
+  roughness: 0.12,
+  envMapIntensity: 1.8
+});
+
+// Load spoon
+const loader = new GLTFLoader();
+
+loader.load(
+  "./spoon.glb",
+
+  (gltf) => {
+    const model = gltf.scene;
+
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        child.material = spoonMaterial;
+      }
     });
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Calculate model centre and size
+    model.updateMatrixWorld(true);
 
-    document.body.appendChild(renderer.domElement);
+    const box = new THREE.Box3().setFromObject(model);
+    const centre = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
 
-    // NORMAL ENVIRONMENT REFLECTIONS
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const environment = new RoomEnvironment();
-    const envTexture = pmrem.fromScene(environment).texture;
-
-    scene.environment = envTexture;
-
-    // LIGHTING
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-
-    const keyLight = new THREE.DirectionalLight(0xffffff, 4);
-    keyLight.position.set(5, 8, 6);
-    scene.add(keyLight);
-
-    const fillLight = new THREE.DirectionalLight(0xb8d8ff, 2);
-    fillLight.position.set(-6, 2, 4);
-    scene.add(fillLight);
-
-    const rimLight = new THREE.DirectionalLight(0xffffff, 4);
-    rimLight.position.set(0, -5, -6);
-    scene.add(rimLight);
-
-    const pointLight1 = new THREE.PointLight(0xffffff, 80);
-    pointLight1.position.set(-4, 3, 5);
-    scene.add(pointLight1);
-
-    const pointLight2 = new THREE.PointLight(0x8ebfff, 50);
-    pointLight2.position.set(4, -2, 3);
-    scene.add(pointLight2);
-
-    // CAMERA TEXTURE PLACEHOLDER
-    const placeholderTexture = new THREE.DataTexture(
-      new Uint8Array([0, 0, 0, 255]),
-      1,
-      1,
-      THREE.RGBAFormat
+    const maxDimension = Math.max(
+      size.x,
+      size.y,
+      size.z
     );
 
-    placeholderTexture.needsUpdate = true;
+    if (!Number.isFinite(maxDimension) || maxDimension === 0) {
+      console.error("Invalid spoon dimensions");
+      return;
+    }
 
-    let cameraTexture = placeholderTexture;
-    let cameraStream = null;
-    let compiledShader = null;
-    let cameraEnabled = false;
+    // Centre and scale
+    const modelHolder = new THREE.Group();
 
-    // SILVER MATERIAL
-    const spoonMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xffffff,
-      metalness: 1,
-      roughness: 0.12,
-      envMapIntensity: 2,
-      clearcoat: 1,
-      clearcoatRoughness: 0.08
-    });
+    modelHolder.add(model);
+    model.position.sub(centre);
 
-    // LIVE CAMERA FEED SHADER
-    spoonMaterial.onBeforeCompile = (shader) => {
-      shader.uniforms.uCameraFeed = {
-        value: cameraTexture
-      };
+    modelHolder.scale.setScalar(3.5 / maxDimension);
 
-      shader.uniforms.uCameraEnabled = {
-        value: cameraEnabled ? 1.0 : 0.0
-      };
+    rotationGroup.add(modelHolder);
 
-      shader.uniforms.uViewport = {
-        value: new THREE.Vector2(
-          window.innerWidth,
-          window.innerHeight
-        )
-      };
+    console.log("Spoon loaded successfully!");
+  },
 
-      shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <common>",
-        `#include <common>
-        uniform sampler2D uCameraFeed;
-        uniform float uCameraEnabled;
-        uniform vec2 uViewport;`
-      );
+  undefined,
 
-      shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <opaque_fragment>",
-        `#include <opaque_fragment>
+  (error) => {
+    console.error("Failed to load spoon.glb:", error);
+  }
+);
 
-        vec2 cameraUV = gl_FragCoord.xy / uViewport;
-        cameraUV.y = 1.0 - cameraUV.y;
 
-        vec3 cameraColor = texture2D(
-          uCameraFeed,
-          cameraUV
-        ).rgb;
+// =====================================
+// CUSTOM GLB REFLECTION ENVIRONMENT
+// =====================================
 
-        gl_FragColor.rgb = mix(
-          gl_FragColor.rgb,
-          cameraColor,
-          uCameraEnabled * 0.85
-        );`
-      );
+// Separate scene containing only the imported environment
+const reflectionScene = new THREE.Scene();
+reflectionScene.background = new THREE.Color(0x000000);
 
-      compiledShader = shader;
-    };
+// Lighting for the imported environment
+reflectionScene.add(
+  new THREE.AmbientLight(0xffffff, 1.5)
+);
 
-    // MODEL HOLDER
-    const holder = new THREE.Group();
-    scene.add(holder);
+const reflectionLight = new THREE.DirectionalLight(
+  0xffffff,
+  3
+);
 
-    // STARTING ROTATION
-    holder.rotation.set(
-      THREE.MathUtils.degToRad(-90),
-      THREE.MathUtils.degToRad(-90),
-      THREE.MathUtils.degToRad(90)
-    );
+reflectionLight.position.set(5, 8, 5);
+reflectionScene.add(reflectionLight);
 
-    // LOAD SPOON
-    const loader = new GLTFLoader();
+// Cube camera captures the environment from the spoon's centre
+const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(512, {
+  type: THREE.HalfFloatType,
+  generateMipmaps: true,
+  minFilter: THREE.LinearMipmapLinearFilter
+});
 
-    loader.load(
-      "./spoon.glb",
+const cubeCamera = new THREE.CubeCamera(
+  0.1,
+  1000,
+  cubeRenderTarget
+);
+
+reflectionScene.add(cubeCamera);
+
+// Keep track of the imported environment
+let importedEnvironment = null;
+let importedPMREM = null;
+
+const status = document.getElementById("status");
+const fileInput = document.getElementById("sceneFile");
+
+fileInput.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+
+  if (!file) return;
+
+  if (!file.name.toLowerCase().endsWith(".glb")) {
+    status.textContent = "Please choose a GLB file";
+    return;
+  }
+
+  status.textContent = "Loading environment...";
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    loader.parse(
+      reader.result,
+      "",
+
       (gltf) => {
-        const model = gltf.scene;
+        // Remove previous environment
+        if (importedEnvironment) {
+          reflectionScene.remove(importedEnvironment);
+        }
 
-        model.updateMatrixWorld(true);
+        // Add new environment
+        importedEnvironment = gltf.scene;
 
-        const box = new THREE.Box3().setFromObject(model);
+        importedEnvironment.updateMatrixWorld(true);
+
+        // Find its dimensions
+        const box = new THREE.Box3().setFromObject(
+          importedEnvironment
+        );
+
         const centre = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
 
-        model.position.sub(centre);
-
-        const largestDimension = Math.max(
+        const maxDimension = Math.max(
           size.x,
           size.y,
           size.z
         );
 
-        if (largestDimension > 0) {
-          model.scale.setScalar(4 / largestDimension);
+        if (
+          !Number.isFinite(maxDimension) ||
+          maxDimension === 0
+        ) {
+          status.textContent = "Invalid GLB scene";
+          return;
         }
 
-        model.traverse((child) => {
-          if (child.isMesh) {
-            child.material = spoonMaterial;
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
+        // Centre the environment around the spoon
+        const environmentHolder = new THREE.Group();
 
-        holder.add(model);
+        environmentHolder.add(importedEnvironment);
+
+        importedEnvironment.position.sub(centre);
+
+        // Scale environment to surround the spoon
+        environmentHolder.scale.setScalar(
+          20 / maxDimension
+        );
+
+        reflectionScene.add(environmentHolder);
+
+        importedEnvironment = environmentHolder;
+
+        // Capture the environment
+        cubeCamera.position.set(0, 0, 0);
+        cubeCamera.update(renderer, reflectionScene);
+
+        // Convert captured cube map into a smooth reflection map
+        if (importedPMREM) {
+          importedPMREM.dispose();
+        }
+
+        importedPMREM = pmrem.fromCubemap(
+          cubeRenderTarget.texture
+        );
+
+        // Apply imported environment to spoon
+        spoonMaterial.envMap = importedPMREM.texture;
+        spoonMaterial.envMapIntensity = 1.8;
+        spoonMaterial.needsUpdate = true;
+
+        status.textContent = "Using: " + file.name;
+
+        console.log("Reflection environment loaded!");
       },
-      undefined,
+
       (error) => {
-        console.error("Could not load spoon.glb:", error);
+        console.error("Failed to load reflection scene:", error);
+        status.textContent = "Failed to load GLB";
       }
     );
+  };
 
-    // CAMERA TOGGLE
-    const toggle = document.getElementById("cameraToggle");
-    const status = document.getElementById("cameraStatus");
-    const video = document.getElementById("cameraVideo");
+  reader.onerror = () => {
+    status.textContent = "Could not read file";
+  };
 
-    async function enableCamera() {
-      try {
-        status.textContent = "Requesting camera permission...";
+  reader.readAsArrayBuffer(file);
+});
 
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" }
-          },
-          audio: false
-        });
 
-        video.srcObject = cameraStream;
-        await video.play();
+// =====================================
+// DRAG AND MOMENTUM
+// =====================================
 
-        cameraTexture = new THREE.VideoTexture(video);
-        cameraTexture.colorSpace = THREE.SRGBColorSpace;
-        cameraTexture.minFilter = THREE.LinearFilter;
-        cameraTexture.magFilter = THREE.LinearFilter;
+let dragging = false;
 
-        cameraEnabled = true;
+let previousX = 0;
+let previousY = 0;
 
-        if (compiledShader) {
-          compiledShader.uniforms.uCameraFeed.value = cameraTexture;
-          compiledShader.uniforms.uCameraEnabled.value = 1.0;
-        }
+let velocityX = 0;
+let velocityY = 0;
 
-        status.textContent = "Live camera reflection";
-      } catch (error) {
-        console.error("Camera error:", error);
+const FRICTION = 0.94;
+const ROTATION_SENSITIVITY = 0.008;
+const MAX_SPEED = 0.15;
 
-        cameraEnabled = false;
-        toggle.checked = false;
+const activePointers = new Map();
 
-        status.textContent =
-          "Camera unavailable - check permissions";
-      }
-    }
+// Pointer down
+renderer.domElement.addEventListener("pointerdown", (event) => {
+  activePointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY
+  });
 
-    function disableCamera() {
-      cameraEnabled = false;
+  if (activePointers.size === 1) {
+    dragging = true;
 
-      if (compiledShader) {
-        compiledShader.uniforms.uCameraEnabled.value = 0.0;
-        compiledShader.uniforms.uCameraFeed.value = placeholderTexture;
-      }
+    previousX = event.clientX;
+    previousY = event.clientY;
 
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-      }
+    velocityX = 0;
+    velocityY = 0;
+  }
 
-      if (cameraTexture !== placeholderTexture) {
-        cameraTexture.dispose();
-        cameraTexture = placeholderTexture;
-      }
+  renderer.domElement.setPointerCapture(event.pointerId);
+});
 
-      video.srcObject = null;
-      status.textContent = "Normal reflections";
-    }
+// Pointer move
+renderer.domElement.addEventListener("pointermove", (event) => {
+  if (!activePointers.has(event.pointerId)) return;
 
-    toggle.addEventListener("change", () => {
-      if (toggle.checked) {
-        enableCamera();
-      } else {
-        disableCamera();
-      }
-    });
+  const oldPointer = activePointers.get(event.pointerId);
 
-    // DRAG ROTATION AND PINCH ZOOM
-    const pointers = new Map();
+  activePointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY
+  });
 
-    let previousPinchDistance = null;
-    let velocityX = 0;
-    let velocityY = 0;
-    let dragging = false;
+  // Pinch zoom
+  if (activePointers.size === 2) {
+    const other = [...activePointers.entries()]
+      .find(([id]) => id !== event.pointerId)[1];
 
-    function getPinchDistance() {
-      const points = [...pointers.values()];
+    const oldDistance = Math.hypot(
+      oldPointer.x - other.x,
+      oldPointer.y - other.y
+    );
 
-      if (points.length < 2) return null;
+    const newDistance = Math.hypot(
+      event.clientX - other.x,
+      event.clientY - other.y
+    );
 
-      return Math.hypot(
-        points[0].x - points[1].x,
-        points[0].y - points[1].y
-      );
-    }
-
-    renderer.domElement.addEventListener("pointerdown", (event) => {
-      renderer.domElement.setPointerCapture(event.pointerId);
-
-      pointers.set(event.pointerId, {
-        x: event.clientX,
-        y: event.clientY
-      });
-
-      dragging = true;
-      velocityX = 0;
-      velocityY = 0;
-
-      if (pointers.size === 2) {
-        previousPinchDistance = getPinchDistance();
-      }
-    });
-
-    renderer.domElement.addEventListener("pointermove", (event) => {
-      if (!pointers.has(event.pointerId)) return;
-
-      const previous = pointers.get(event.pointerId);
-
-      const dx = event.clientX - previous.x;
-      const dy = event.clientY - previous.y;
-
-      pointers.set(event.pointerId, {
-        x: event.clientX,
-        y: event.clientY
-      });
-
-      if (pointers.size === 1) {
-        holder.rotation.y += dx * 0.008;
-        holder.rotation.x += dy * 0.008;
-
-        velocityX = dx * 0.008;
-        velocityY = dy * 0.008;
-      }
-
-      if (pointers.size === 2) {
-        const distance = getPinchDistance();
-
-        if (distance !== null && previousPinchDistance !== null) {
-          const change = distance - previousPinchDistance;
-
-          camera.position.z -= change * 0.015;
-          camera.position.z = THREE.MathUtils.clamp(
-            camera.position.z,
-            3,
-            25
-          );
-        }
-
-        previousPinchDistance = distance;
-      }
-    });
-
-    function endPointer(event) {
-      pointers.delete(event.pointerId);
-
-      if (pointers.size < 2) {
-        previousPinchDistance = null;
-      }
-
-      if (pointers.size === 0) {
-        dragging = false;
-      }
-    }
-
-    renderer.domElement.addEventListener("pointerup", endPointer);
-    renderer.domElement.addEventListener("pointercancel", endPointer);
-
-    // MOUSE WHEEL ZOOM
-    renderer.domElement.addEventListener("wheel", (event) => {
-      camera.position.z += event.deltaY * 0.008;
+    if (oldDistance > 0) {
+      camera.position.z += (oldDistance - newDistance) * 0.025;
 
       camera.position.z = THREE.MathUtils.clamp(
         camera.position.z,
-        3,
+        4,
         25
       );
-    }, { passive: true });
-
-    // RESIZE
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-
-      renderer.setSize(
-        window.innerWidth,
-        window.innerHeight
-      );
-
-      if (compiledShader) {
-        compiledShader.uniforms.uViewport.value.set(
-          window.innerWidth,
-          window.innerHeight
-        );
-      }
-    });
-
-    // ANIMATION
-    function animate() {
-      requestAnimationFrame(animate);
-
-      if (!dragging) {
-        holder.rotation.y += velocityX;
-        holder.rotation.x += velocityY;
-
-        velocityX *= 0.94;
-        velocityY *= 0.94;
-
-        if (Math.abs(velocityX) < 0.00001) velocityX = 0;
-        if (Math.abs(velocityY) < 0.00001) velocityY = 0;
-      }
-
-      renderer.render(scene, camera);
     }
 
-    animate();
+    dragging = false;
+    velocityX = 0;
+    velocityY = 0;
 
-  </script>
+    return;
+  }
+
+  // Single pointer rotation
+  if (activePointers.size === 1) {
+    const dx = event.clientX - previousX;
+    const dy = event.clientY - previousY;
+
+    velocityX = THREE.MathUtils.clamp(
+      dx * ROTATION_SENSITIVITY,
+      -MAX_SPEED,
+      MAX_SPEED
+    );
+
+    velocityY = THREE.MathUtils.clamp(
+      dy * ROTATION_SENSITIVITY,
+      -MAX_SPEED,
+      MAX_SPEED
+    );
+
+    rotationGroup.rotation.y += velocityX;
+    rotationGroup.rotation.x += velocityY;
+
+    previousX = event.clientX;
+    previousY = event.clientY;
+
+    dragging = true;
+  }
+});
+
+// Pointer release
+function removePointer(event) {
+  activePointers.delete(event.pointerId);
+
+  if (activePointers.size === 0) {
+    dragging = false;
+  } else if (activePointers.size === 1) {
+    const remaining = [...activePointers.values()][0];
+
+    previousX = remaining.x;
+    previousY = remaining.y;
+
+    dragging = true;
+
+    velocityX = 0;
+    velocityY = 0;
+  }
+}
+
+renderer.domElement.addEventListener("pointerup", removePointer);
+renderer.domElement.addEventListener("pointercancel", removePointer);
+
+// Mouse wheel zoom
+renderer.domElement.addEventListener("wheel", (event) => {
+  event.preventDefault();
+
+  camera.position.z += event.deltaY * 0.008;
+
+  camera.position.z = THREE.MathUtils.clamp(
+    camera.position.z,
+    4,
+    25
+  );
+}, { passive: false });
+
+
+// =====================================
+// ANIMATION
+// =====================================
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Apply momentum after dragging
+  if (!dragging) {
+    rotationGroup.rotation.y += velocityX;
+    rotationGroup.rotation.x += velocityY;
+
+    velocityX *= FRICTION;
+    velocityY *= FRICTION;
+
+    if (Math.abs(velocityX) < 0.0001) velocityX = 0;
+    if (Math.abs(velocityY) < 0.0001) velocityY = 0;
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// Resize
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+  );
+});
+
+</script>
 </body>
 </html>
