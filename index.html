@@ -32,22 +32,29 @@
       z-index: 10;
       color: white;
       background: #222;
-      padding: 12px 15px;
+      padding: 14px;
       border-radius: 10px;
       font-size: 14px;
+      width: 230px;
       cursor: default;
+      box-sizing: border-box;
     }
 
-    #importButton {
+    #importButton,
+    #resetButton {
       display: inline-block;
       background: #444;
       padding: 9px 12px;
       border-radius: 6px;
       cursor: pointer;
       margin-top: 8px;
+      color: white;
+      border: none;
+      font-size: 13px;
     }
 
-    #importButton:hover {
+    #importButton:hover,
+    #resetButton:hover {
       background: #555;
     }
 
@@ -59,7 +66,28 @@
       color: #aaa;
       font-size: 12px;
       margin-top: 8px;
-      max-width: 200px;
+      overflow-wrap: anywhere;
+    }
+
+    .rotationControl {
+      margin-top: 12px;
+    }
+
+    .rotationHeading {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      color: #ddd;
+      font-size: 12px;
+    }
+
+    .rotationControl input {
+      width: 100%;
+      cursor: pointer;
+    }
+
+    #resetButton {
+      width: 100%;
     }
   </style>
 
@@ -76,13 +104,42 @@
 <body>
 
 <div id="importPanel">
-  **Reflection environment**
+  <strong>Reflection environment</strong>
   <br>
+
   <label id="importButton" for="sceneFile">
     Import GLB scene
   </label>
+
   <input id="sceneFile" type="file" accept=".glb">
+
   <div id="status">Using default reflections</div>
+
+  <div class="rotationControl">
+    <div class="rotationHeading">
+      <span>X rotation</span>
+      <span id="xValue">0°</span>
+    </div>
+    <input id="rotateX" type="range" min="-180" max="180" value="0">
+  </div>
+
+  <div class="rotationControl">
+    <div class="rotationHeading">
+      <span>Y rotation</span>
+      <span id="yValue">0°</span>
+    </div>
+    <input id="rotateY" type="range" min="-180" max="180" value="0">
+  </div>
+
+  <div class="rotationControl">
+    <div class="rotationHeading">
+      <span>Z rotation</span>
+      <span id="zValue">0°</span>
+    </div>
+    <input id="rotateZ" type="range" min="-180" max="180" value="0">
+  </div>
+
+  <button id="resetButton">Reset rotation</button>
 </div>
 
 <script type="module">
@@ -199,7 +256,6 @@ loader.load(
       }
     });
 
-    // Calculate model centre and size
     model.updateMatrixWorld(true);
 
     const box = new THREE.Box3().setFromObject(model);
@@ -217,7 +273,6 @@ loader.load(
       return;
     }
 
-    // Centre and scale
     const modelHolder = new THREE.Group();
 
     modelHolder.add(model);
@@ -239,14 +294,12 @@ loader.load(
 
 
 // =====================================
-// CUSTOM GLB REFLECTION ENVIRONMENT
+// GLB REFLECTION ENVIRONMENT
 // =====================================
 
-// Separate scene containing only the imported environment
 const reflectionScene = new THREE.Scene();
 reflectionScene.background = new THREE.Color(0x000000);
 
-// Lighting for the imported environment
 reflectionScene.add(
   new THREE.AmbientLight(0xffffff, 1.5)
 );
@@ -259,7 +312,11 @@ const reflectionLight = new THREE.DirectionalLight(
 reflectionLight.position.set(5, 8, 5);
 reflectionScene.add(reflectionLight);
 
-// Cube camera captures the environment from the spoon's centre
+// Environment rotation holder
+const environmentHolder = new THREE.Group();
+reflectionScene.add(environmentHolder);
+
+// Cube camera
 const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(512, {
   type: THREE.HalfFloatType,
   generateMipmaps: true,
@@ -274,22 +331,75 @@ const cubeCamera = new THREE.CubeCamera(
 
 reflectionScene.add(cubeCamera);
 
-// Keep track of the imported environment
-let importedEnvironment = null;
 let importedPMREM = null;
+let environmentLoaded = false;
 
 const status = document.getElementById("status");
 const fileInput = document.getElementById("sceneFile");
 
+// Rotation sliders
+const rotateX = document.getElementById("rotateX");
+const rotateY = document.getElementById("rotateY");
+const rotateZ = document.getElementById("rotateZ");
+
+const xValue = document.getElementById("xValue");
+const yValue = document.getElementById("yValue");
+const zValue = document.getElementById("zValue");
+
+// Update the environment reflection
+function updateReflection() {
+  if (!environmentLoaded) return;
+
+  // Rotate the imported environment
+  environmentHolder.rotation.set(
+    THREE.MathUtils.degToRad(Number(rotateX.value)),
+    THREE.MathUtils.degToRad(Number(rotateY.value)),
+    THREE.MathUtils.degToRad(Number(rotateZ.value))
+  );
+
+  // Update displayed values
+  xValue.textContent = rotateX.value + "°";
+  yValue.textContent = rotateY.value + "°";
+  zValue.textContent = rotateZ.value + "°";
+
+  // Capture the newly rotated environment
+  cubeCamera.update(renderer, reflectionScene);
+
+  // Generate updated reflection map
+  const newPMREM = pmrem.fromCubemap(
+    cubeRenderTarget.texture
+  );
+
+  // Replace old reflection map
+  spoonMaterial.envMap = newPMREM.texture;
+  spoonMaterial.needsUpdate = true;
+
+  if (importedPMREM) {
+    importedPMREM.dispose();
+  }
+
+  importedPMREM = newPMREM;
+}
+
+// Slider listeners
+[rotateX, rotateY, rotateZ].forEach(slider => {
+  slider.addEventListener("input", updateReflection);
+});
+
+// Reset button
+document.getElementById("resetButton").addEventListener("click", () => {
+  rotateX.value = 0;
+  rotateY.value = 0;
+  rotateZ.value = 0;
+
+  updateReflection();
+});
+
+// Import GLB
 fileInput.addEventListener("change", (event) => {
   const file = event.target.files[0];
 
   if (!file) return;
-
-  if (!file.name.toLowerCase().endsWith(".glb")) {
-    status.textContent = "Please choose a GLB file";
-    return;
-  }
 
   status.textContent = "Loading environment...";
 
@@ -302,18 +412,15 @@ fileInput.addEventListener("change", (event) => {
 
       (gltf) => {
         // Remove previous environment
-        if (importedEnvironment) {
-          reflectionScene.remove(importedEnvironment);
-        }
+        environmentHolder.clear();
 
-        // Add new environment
-        importedEnvironment = gltf.scene;
+        // Add imported scene
+        const importedScene = gltf.scene;
 
-        importedEnvironment.updateMatrixWorld(true);
+        importedScene.updateMatrixWorld(true);
 
-        // Find its dimensions
         const box = new THREE.Box3().setFromObject(
-          importedEnvironment
+          importedScene
         );
 
         const centre = box.getCenter(new THREE.Vector3());
@@ -333,39 +440,24 @@ fileInput.addEventListener("change", (event) => {
           return;
         }
 
-        // Centre the environment around the spoon
-        const environmentHolder = new THREE.Group();
+        // Centre imported scene
+        importedScene.position.sub(centre);
 
-        environmentHolder.add(importedEnvironment);
+        // Scale environment to surround spoon
+        const scale = 20 / maxDimension;
 
-        importedEnvironment.position.sub(centre);
+        importedScene.scale.setScalar(scale);
 
-        // Scale environment to surround the spoon
-        environmentHolder.scale.setScalar(
-          20 / maxDimension
-        );
+        environmentHolder.add(importedScene);
 
-        reflectionScene.add(environmentHolder);
+        // Reset sliders
+        rotateX.value = 0;
+        rotateY.value = 0;
+        rotateZ.value = 0;
 
-        importedEnvironment = environmentHolder;
+        environmentLoaded = true;
 
-        // Capture the environment
-        cubeCamera.position.set(0, 0, 0);
-        cubeCamera.update(renderer, reflectionScene);
-
-        // Convert captured cube map into a smooth reflection map
-        if (importedPMREM) {
-          importedPMREM.dispose();
-        }
-
-        importedPMREM = pmrem.fromCubemap(
-          cubeRenderTarget.texture
-        );
-
-        // Apply imported environment to spoon
-        spoonMaterial.envMap = importedPMREM.texture;
-        spoonMaterial.envMapIntensity = 1.8;
-        spoonMaterial.needsUpdate = true;
+        updateReflection();
 
         status.textContent = "Using: " + file.name;
 
@@ -405,7 +497,6 @@ const MAX_SPEED = 0.15;
 
 const activePointers = new Map();
 
-// Pointer down
 renderer.domElement.addEventListener("pointerdown", (event) => {
   activePointers.set(event.pointerId, {
     x: event.clientX,
@@ -425,7 +516,6 @@ renderer.domElement.addEventListener("pointerdown", (event) => {
   renderer.domElement.setPointerCapture(event.pointerId);
 });
 
-// Pointer move
 renderer.domElement.addEventListener("pointermove", (event) => {
   if (!activePointers.has(event.pointerId)) return;
 
@@ -495,7 +585,6 @@ renderer.domElement.addEventListener("pointermove", (event) => {
   }
 });
 
-// Pointer release
 function removePointer(event) {
   activePointers.delete(event.pointerId);
 
@@ -538,7 +627,6 @@ renderer.domElement.addEventListener("wheel", (event) => {
 function animate() {
   requestAnimationFrame(animate);
 
-  // Apply momentum after dragging
   if (!dragging) {
     rotationGroup.rotation.y += velocityX;
     rotationGroup.rotation.x += velocityY;
