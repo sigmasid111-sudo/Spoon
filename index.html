@@ -59,16 +59,13 @@ camera.lookAt(0, 0, 0);
 
 // RENDERER
 const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  alpha: false
+  antialias: true
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -89,14 +86,14 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
 dirLight.position.set(2, 8, 3);
 dirLight.castShadow = true;
 dirLight.shadow.mapSize.set(2048, 2048);
-
 scene.add(dirLight);
 
 // METALLIC MATERIAL
 const metallicMaterial = new THREE.MeshStandardMaterial({
   color: 0xd8dde6,
   metalness: 0.96,
-  roughness: 0.14
+  roughness: 0.14,
+  side: THREE.DoubleSide
 });
 
 // ROTATING GROUP
@@ -120,7 +117,7 @@ loader.load(
       }
     });
 
-    // Calculate original dimensions
+    // ORIGINAL DIMENSIONS
     const originalBox = new THREE.Box3().setFromObject(model);
     const originalSize = originalBox.getSize(new THREE.Vector3());
 
@@ -135,25 +132,26 @@ loader.load(
       return;
     }
 
-    // Scale model
+    // SCALE
     model.scale.multiplyScalar(MODEL_SIZE / maxDim);
 
-    // Centre model
+    // CENTRE
     const scaledBox = new THREE.Box3().setFromObject(model);
     const center = scaledBox.getCenter(new THREE.Vector3());
 
     model.position.sub(center);
 
-    // Add model
+    // FACE SPOON UPWARDS
+    // Change this if the original GLB has a different orientation.
+    model.rotation.set(0, 0, 0);
+
     spinGroup.add(model);
 
-    // Calculate model size
+    // CAMERA FIT
     const box = new THREE.Box3().setFromObject(spinGroup);
     const size = box.getSize(new THREE.Vector3());
 
-    // Calculate camera distance for top-down view
     const maxSize = Math.max(size.x, size.z);
-
     const verticalFov = THREE.MathUtils.degToRad(camera.fov);
 
     const horizontalFov = 2 * Math.atan(
@@ -165,7 +163,6 @@ loader.load(
       maxSize / (2 * Math.tan(horizontalFov / 2))
     ) * CAMERA_MARGIN;
 
-    // Keep camera directly above model
     camera.position.set(
       0,
       Math.max(CAMERA_HEIGHT, distance),
@@ -185,11 +182,11 @@ loader.load(
   }
 );
 
-// ANIMATION
+// ANIMATION - SPIN ON X AXIS
 function animate() {
   requestAnimationFrame(animate);
 
-  spinGroup.rotation.y += ROTATION_SPEED;
+  spinGroup.rotation.x += ROTATION_SPEED;
 
   renderer.render(scene, camera);
 }
