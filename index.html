@@ -31,30 +31,34 @@
 <body>
 
 <script type="module">
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 // SETTINGS
-const ROTATION_SPEED = 0.001;
-const MODEL_SIZE = 2.0;
-const CAMERA_MARGIN = 2.5;
-const CAMERA_HEIGHT = 12;
+const ROTATION_SPEED = 0.01;
+const MODEL_SIZE = 3.5;
+const CAMERA_DISTANCE = 8;
+
+// SPOON ORIENTATION
+// Adjust these only if the model appears incorrectly oriented.
+const SPOON_ROTATION_X = -90;
+const SPOON_ROTATION_Y = 0;
+const SPOON_ROTATION_Z = 90;
 
 // SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
-// CAMERA - TOP DOWN
+// CAMERA
 const camera = new THREE.PerspectiveCamera(
-  45,
+  40,
   window.innerWidth / window.innerHeight,
-  0.01,
-  2000
+  0.1,
+  1000
 );
 
-camera.position.set(0, CAMERA_HEIGHT, 0);
-camera.up.set(0, 0, -1);
+camera.position.set(0, 0, CAMERA_DISTANCE);
 camera.lookAt(0, 0, 0);
 
 // RENDERER
@@ -64,15 +68,17 @@ const renderer = new THREE.WebGLRenderer({
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
 
-// ENVIRONMENT
+// REFLECTION ENVIRONMENT
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 const environment = new RoomEnvironment();
 
@@ -82,21 +88,21 @@ environment.dispose();
 pmremGenerator.dispose();
 
 // LIGHTING
-const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
-dirLight.position.set(2, 8, 3);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(2048, 2048);
-scene.add(dirLight);
+const mainLight = new THREE.DirectionalLight(0xffffff, 4);
+mainLight.position.set(4, 6, 5);
+scene.add(mainLight);
 
-// METALLIC MATERIAL
-const metallicMaterial = new THREE.MeshStandardMaterial({
-  color: 0xd8dde6,
-  metalness: 0.96,
-  roughness: 0.14,
-  side: THREE.DoubleSide
-});
+const fillLight = new THREE.DirectionalLight(0x9bbcff, 2);
+fillLight.position.set(-5, 2, 4);
+scene.add(fillLight);
 
-// ROTATING GROUP
+const rimLight = new THREE.DirectionalLight(0xffffff, 3);
+rimLight.position.set(0, 4, -5);
+scene.add(rimLight);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+// SPIN GROUP
 const spinGroup = new THREE.Group();
 scene.add(spinGroup);
 
@@ -104,88 +110,69 @@ scene.add(spinGroup);
 const loader = new GLTFLoader();
 
 loader.load(
-  './Spoon.glb',
+  "./spoon.glb",
 
   (gltf) => {
     const model = gltf.scene;
 
+    // Apply silver material
+    const silverMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd8dde6,
+      metalness: 0.96,
+      roughness: 0.14,
+      side: THREE.DoubleSide
+    });
+
     model.traverse((child) => {
       if (child.isMesh) {
-        child.material = metallicMaterial;
+        child.material = silverMaterial;
         child.castShadow = true;
         child.receiveShadow = true;
       }
     });
 
-    // ORIGINAL DIMENSIONS
-    const originalBox = new THREE.Box3().setFromObject(model);
-    const originalSize = originalBox.getSize(new THREE.Vector3());
-
-    const maxDim = Math.max(
-      originalSize.x,
-      originalSize.y,
-      originalSize.z
+    // Rotate spoon so handle points upwards
+    // and bowl faces the camera.
+    model.rotation.set(
+      THREE.MathUtils.degToRad(SPOON_ROTATION_X),
+      THREE.MathUtils.degToRad(SPOON_ROTATION_Y),
+      THREE.MathUtils.degToRad(SPOON_ROTATION_Z)
     );
 
-    if (!Number.isFinite(maxDim) || maxDim <= 0) {
-      console.error('Invalid spoon dimensions');
-      return;
-    }
+    // Calculate size
+    let box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
 
-    // SCALE
-    model.scale.multiplyScalar(MODEL_SIZE / maxDim);
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    const scale = MODEL_SIZE / maxDimension;
 
-    // CENTRE
-    const scaledBox = new THREE.Box3().setFromObject(model);
-    const center = scaledBox.getCenter(new THREE.Vector3());
+    model.scale.setScalar(scale);
+
+    // Centre the spoon
+    box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
 
     model.position.sub(center);
 
-    // FACE SPOON UPWARDS
-    // Change this if the original GLB has a different orientation.
-    model.rotation.set(0, 0, 0);
-
+    // Add to spinning group
     spinGroup.add(model);
 
-    // CAMERA FIT
-    const box = new THREE.Box3().setFromObject(spinGroup);
-    const size = box.getSize(new THREE.Vector3());
-
-    const maxSize = Math.max(size.x, size.z);
-    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
-
-    const horizontalFov = 2 * Math.atan(
-      Math.tan(verticalFov / 2) * camera.aspect
-    );
-
-    const distance = Math.max(
-      maxSize / (2 * Math.tan(verticalFov / 2)),
-      maxSize / (2 * Math.tan(horizontalFov / 2))
-    ) * CAMERA_MARGIN;
-
-    camera.position.set(
-      0,
-      Math.max(CAMERA_HEIGHT, distance),
-      0
-    );
-
-    camera.lookAt(0, 0, 0);
-    camera.updateProjectionMatrix();
-
-    console.log('Spoon loaded successfully!');
+    console.log("Spoon loaded!");
+    console.log("Spoon dimensions:", size);
   },
 
   undefined,
 
   (error) => {
-    console.error('Error loading Spoon.glb:', error);
+    console.error("Could not load Spoon.glb:", error);
   }
 );
 
-// ANIMATION - SPIN ON X AXIS
+// ANIMATION
 function animate() {
   requestAnimationFrame(animate);
 
+  // Spin around vertical axis
   spinGroup.rotation.y += ROTATION_SPEED;
 
   renderer.render(scene, camera);
@@ -194,13 +181,12 @@ function animate() {
 animate();
 
 // RESIZE
-window.addEventListener('resize', () => {
+window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
 </script>
 
 </body>
