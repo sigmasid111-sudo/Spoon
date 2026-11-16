@@ -36,14 +36,18 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 // SETTINGS
-const ROTATION_SPEED = 0.01;
 const MODEL_SIZE = 3.5;
 const CAMERA_DISTANCE = 8;
 
-// STARTING ROTATION
-const SPOON_ROTATION_X = -90;
-const SPOON_ROTATION_Y = -90;
-const SPOON_ROTATION_Z = 90;
+const DEFAULT_X = -90;
+const DEFAULT_Y = -90;
+const DEFAULT_Z = 90;
+
+// RANDOM MOVEMENT SETTINGS
+const MIN_SPEED = 0.3;
+const MAX_SPEED = 1.5;
+const MIN_TURN_TIME = 1.5;
+const MAX_TURN_TIME = 4;
 
 // SCENE
 const scene = new THREE.Scene();
@@ -105,12 +109,38 @@ scene.add(spinGroup);
 const orientationGroup = new THREE.Group();
 
 orientationGroup.rotation.set(
-  THREE.MathUtils.degToRad(SPOON_ROTATION_X),
-  THREE.MathUtils.degToRad(SPOON_ROTATION_Y),
-  THREE.MathUtils.degToRad(SPOON_ROTATION_Z)
+  THREE.MathUtils.degToRad(DEFAULT_X),
+  THREE.MathUtils.degToRad(DEFAULT_Y),
+  THREE.MathUtils.degToRad(DEFAULT_Z)
 );
 
 spinGroup.add(orientationGroup);
+
+// RANDOM ROTATION TARGETS
+let targetRotation = new THREE.Euler();
+let targetSpeed = new THREE.Vector3();
+let nextChange = 0;
+
+function chooseRandomMovement() {
+  targetRotation.set(
+    THREE.MathUtils.degToRad(DEFAULT_X + THREE.MathUtils.randFloat(-180, 180)),
+    THREE.MathUtils.degToRad(DEFAULT_Y + THREE.MathUtils.randFloat(-180, 180)),
+    THREE.MathUtils.degToRad(DEFAULT_Z + THREE.MathUtils.randFloat(-180, 180))
+  );
+
+  targetSpeed.set(
+    THREE.MathUtils.randFloat(-MAX_SPEED, MAX_SPEED),
+    THREE.MathUtils.randFloat(-MAX_SPEED, MAX_SPEED),
+    THREE.MathUtils.randFloat(-MAX_SPEED, MAX_SPEED)
+  );
+
+  nextChange = THREE.MathUtils.randFloat(
+    MIN_TURN_TIME,
+    MAX_TURN_TIME
+  );
+}
+
+chooseRandomMovement();
 
 // LOAD SPOON
 const loader = new GLTFLoader();
@@ -121,7 +151,6 @@ loader.load(
   (gltf) => {
     const model = gltf.scene;
 
-    // SILVER MATERIAL
     const silverMaterial = new THREE.MeshStandardMaterial({
       color: 0xd8dde6,
       metalness: 0.96,
@@ -137,30 +166,20 @@ loader.load(
       }
     });
 
-    // CREATE CENTRED HOLDER
-    const modelHolder = new THREE.Group();
-    modelHolder.add(model);
-
-    // MEASURE MODEL BEFORE ROTATION
-    model.updateMatrixWorld(true);
-
+    // CENTRE MODEL
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
 
-    // CENTRE MODEL AT ORIGIN
     model.position.sub(center);
 
     // SCALE MODEL
     const maxDimension = Math.max(size.x, size.y, size.z);
-    modelHolder.scale.setScalar(MODEL_SIZE / maxDimension);
+    model.scale.setScalar(MODEL_SIZE / maxDimension);
 
-    // ADD MODEL
-    orientationGroup.add(modelHolder);
+    orientationGroup.add(model);
 
     console.log("Spoon loaded!");
-    console.log("Starting rotation: -90, -90, 90");
-    console.log("Spinning around Z axis");
   },
 
   undefined,
@@ -171,11 +190,33 @@ loader.load(
 );
 
 // ANIMATION
+const clock = new THREE.Clock();
+
+const currentRotation = new THREE.Euler(
+  THREE.MathUtils.degToRad(DEFAULT_X),
+  THREE.MathUtils.degToRad(DEFAULT_Y),
+  THREE.MathUtils.degToRad(DEFAULT_Z)
+);
+
 function animate() {
   requestAnimationFrame(animate);
 
-  // SPIN AROUND Z AXIS
-  spinGroup.rotation.z += ROTATION_SPEED;
+  const delta = Math.min(clock.getDelta(), 0.05);
+
+  // Occasionally choose a completely new movement.
+  nextChange -= delta;
+
+  if (nextChange <= 0) {
+    chooseRandomMovement();
+  }
+
+  // Smoothly change rotation.
+  currentRotation.x += targetSpeed.x * delta;
+  currentRotation.y += targetSpeed.y * delta;
+  currentRotation.z += targetSpeed.z * delta;
+
+  // Apply random rotation to the spoon.
+  orientationGroup.rotation.copy(currentRotation);
 
   renderer.render(scene, camera);
 }
