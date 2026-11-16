@@ -37,23 +37,22 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // SETTINGS
 const ROTATION_SPEED = 0.001;
-const MODEL_SIZE = 2.0;
-const CAMERA_MARGIN = 2.5;
-const CAMERA_HEIGHT = 12;
+const MODEL_SIZE = 3.0;
+const CAMERA_DISTANCE = 9;
 
 // SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
-// CAMERA - TOP DOWN
+// CAMERA
 const camera = new THREE.PerspectiveCamera(
   45,
   window.innerWidth / window.innerHeight,
   0.01,
-  2000
+  1000
 );
 
-camera.position.set(0, CAMERA_HEIGHT, 0);
+camera.position.set(0, CAMERA_DISTANCE, 0);
 camera.up.set(0, 0, -1);
 camera.lookAt(0, 0, 0);
 
@@ -88,7 +87,7 @@ dirLight.castShadow = true;
 dirLight.shadow.mapSize.set(2048, 2048);
 scene.add(dirLight);
 
-// METALLIC MATERIAL
+// MATERIAL
 const metallicMaterial = new THREE.MeshStandardMaterial({
   color: 0xd8dde6,
   metalness: 0.96,
@@ -100,7 +99,7 @@ const metallicMaterial = new THREE.MeshStandardMaterial({
 const spinGroup = new THREE.Group();
 scene.add(spinGroup);
 
-// LOAD SPOON
+// LOAD MODEL
 const loader = new GLTFLoader();
 
 loader.load(
@@ -117,7 +116,7 @@ loader.load(
       }
     });
 
-    // ORIGINAL DIMENSIONS
+    // GET ORIGINAL DIMENSIONS
     const originalBox = new THREE.Box3().setFromObject(model);
     const originalSize = originalBox.getSize(new THREE.Vector3());
 
@@ -135,44 +134,20 @@ loader.load(
     // SCALE
     model.scale.multiplyScalar(MODEL_SIZE / maxDim);
 
-    // CENTRE
+    // CENTRE MODEL
     const scaledBox = new THREE.Box3().setFromObject(model);
     const center = scaledBox.getCenter(new THREE.Vector3());
 
     model.position.sub(center);
 
-    // FACE SPOON UPWARDS
-    // Change this if the original GLB has a different orientation.
-    model.rotation.set(0, 0, 0);
-
+    // ADD TO GROUP
     spinGroup.add(model);
 
-    // CAMERA FIT
-    const box = new THREE.Box3().setFromObject(spinGroup);
-    const size = box.getSize(new THREE.Vector3());
-
-    const maxSize = Math.max(size.x, size.z);
-    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
-
-    const horizontalFov = 2 * Math.atan(
-      Math.tan(verticalFov / 2) * camera.aspect
-    );
-
-    const distance = Math.max(
-      maxSize / (2 * Math.tan(verticalFov / 2)),
-      maxSize / (2 * Math.tan(horizontalFov / 2))
-    ) * CAMERA_MARGIN;
-
-    camera.position.set(
-      0,
-      Math.max(CAMERA_HEIGHT, distance),
-      0
-    );
-
+    // FIXED CAMERA - NO AUTOMATIC ZOOM
+    camera.position.set(0, CAMERA_DISTANCE, 0);
     camera.lookAt(0, 0, 0);
-    camera.updateProjectionMatrix();
 
-    console.log('Spoon loaded successfully!');
+    console.log('Spoon loaded!');
   },
 
   undefined,
@@ -182,10 +157,11 @@ loader.load(
   }
 );
 
-// ANIMATION - SPIN ON X AXIS
+// ANIMATION
 function animate() {
   requestAnimationFrame(animate);
 
+  // Rotate around X axis
   spinGroup.rotation.x += ROTATION_SPEED;
 
   renderer.render(scene, camera);
