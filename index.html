@@ -157,7 +157,7 @@ loader.load(
 
     // Slight tilt
     // Correct spoon orientation
-    model.rotation.set(Math.PI / 2, 0, 0);
+    model.rotation.set(Math.PI / 2, 0, Math.PI / 2);
 
     spinGroup.add(model);
 
@@ -182,7 +182,7 @@ loader.load(
 function animate() {
   requestAnimationFrame(animate);
 
-  spinGroup.rotation.y += 0.008;
+  spinGroup.rotation.y += 0.002;
 
   renderer.render(scene, camera);
 }
