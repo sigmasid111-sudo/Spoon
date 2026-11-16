@@ -156,8 +156,8 @@ loader.load(
     model.position.sub(center);
 
     // Slight tilt
-    model.rotation.z = Math.PI * 0.12;
-    model.rotation.x = Math.PI * 0.08;
+    // Correct spoon orientation
+    model.rotation.set(0, 0, 0);
 
     spinGroup.add(model);
 
