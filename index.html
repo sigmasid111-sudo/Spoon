@@ -2,251 +2,184 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spoon</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spoon</title>
 
-<style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: #000;
-  }
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      cursor: grab;
+    }
 
-  canvas {
-    display: block;
-  }
-</style>
+    body:active {
+      cursor: grabbing;
+    }
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    canvas {
+      display: block;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }
   }
-}
-</script>
+  </script>
 </head>
 
 <body>
-
 <script type="module">
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-// SETTINGS
-const MODEL_SIZE = 3.5;
-const CAMERA_DISTANCE = 10;
-
-const DEFAULT_X = -90;
-const DEFAULT_Y = -90;
-const DEFAULT_Z = 90;
-
-// RANDOM SPIN SETTINGS
-const MIN_SPEED = 0.25;
-const MAX_SPEED = 1.2;
-const MIN_CHANGE_TIME = 1.5;
-const MAX_CHANGE_TIME = 3.5;
-const SMOOTHNESS = 1.8;
-
-// SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
-// CAMERA
 const camera = new THREE.PerspectiveCamera(
-  40,
+  45,
   window.innerWidth / window.innerHeight,
   0.1,
   1000
 );
 
-camera.position.set(0, 0, CAMERA_DISTANCE);
-camera.lookAt(0, 0, 0);
+camera.position.set(0, 0, 10);
 
-// RENDERER
-const renderer = new THREE.WebGLRenderer({
-  antialias: true
-});
-
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-
+renderer.toneMappingExposure = 1;
 document.body.appendChild(renderer.domElement);
 
-// REFLECTION ENVIRONMENT
-const pmremGenerator = new THREE.PMREMGenerator(renderer);
-const environment = new RoomEnvironment();
+// Reflections
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(
+  new RoomEnvironment(),
+  0.04
+).texture;
 
-scene.environment = pmremGenerator.fromScene(environment).texture;
-
-environment.dispose();
-pmremGenerator.dispose();
-
-// LIGHTING
-const mainLight = new THREE.DirectionalLight(0xffffff, 4);
-mainLight.position.set(4, 6, 5);
-scene.add(mainLight);
-
-const fillLight = new THREE.DirectionalLight(0x9bbcff, 2);
-fillLight.position.set(-5, 2, 4);
-scene.add(fillLight);
-
-const rimLight = new THREE.DirectionalLight(0xffffff, 3);
-rimLight.position.set(0, 4, -5);
-scene.add(rimLight);
-
+// Lighting
 scene.add(new THREE.AmbientLight(0xffffff, 1));
 
-// ROTATION GROUPS
+const light1 = new THREE.DirectionalLight(0xffffff, 3);
+light1.position.set(5, 5, 5);
+scene.add(light1);
+
+const light2 = new THREE.DirectionalLight(0xffffff, 2);
+light2.position.set(-5, 2, -5);
+scene.add(light2);
+
+// Rotation groups
 const spinGroup = new THREE.Group();
 scene.add(spinGroup);
 
 const orientationGroup = new THREE.Group();
-
-orientationGroup.rotation.set(
-  THREE.MathUtils.degToRad(DEFAULT_X),
-  THREE.MathUtils.degToRad(DEFAULT_Y),
-  THREE.MathUtils.degToRad(DEFAULT_Z)
-);
-
 spinGroup.add(orientationGroup);
 
-// RANDOM SPEED
-const currentSpeed = new THREE.Vector3();
-const targetSpeed = new THREE.Vector3();
+// Starting rotation:
+// X = -90°, Y = -90°, Z = 90°
+orientationGroup.rotation.set(
+  THREE.MathUtils.degToRad(-90),
+  THREE.MathUtils.degToRad(-90),
+  THREE.MathUtils.degToRad(90)
+);
 
-let changeTimer = 0;
-
-function randomSpeed() {
-  const direction = Math.random() < 0.5 ? -1 : 1;
-  return direction * THREE.MathUtils.randFloat(MIN_SPEED, MAX_SPEED);
-}
-
-function chooseRandomDirection() {
-  // Random direction and speed on each axis
-  targetSpeed.set(
-    randomSpeed(),
-    randomSpeed(),
-    randomSpeed()
-  );
-
-  changeTimer = THREE.MathUtils.randFloat(
-    MIN_CHANGE_TIME,
-    MAX_CHANGE_TIME
-  );
-}
-
-// LOAD SPOON
+// Load spoon
 const loader = new GLTFLoader();
 
 loader.load(
   "./spoon.glb",
-
   (gltf) => {
     const model = gltf.scene;
 
-    // SILVER MATERIAL
-    const silverMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd8dde6,
-      metalness: 0.96,
-      roughness: 0.14,
-      envMapIntensity: 1.5,
-      side: THREE.DoubleSide
-    });
+    model.updateMatrixWorld(true);
 
+    // Silver material
     model.traverse((child) => {
       if (child.isMesh) {
-        child.material = silverMaterial;
-        child.castShadow = true;
-        child.receiveShadow = true;
+        child.material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          metalness: 0.96,
+          roughness: 0.14
+        });
       }
     });
 
-    // CREATE A CENTRED PIVOT
-    const modelPivot = new THREE.Group();
-    modelPivot.add(model);
-
-    // CALCULATE MODEL BOUNDS
-    model.updateMatrixWorld(true);
-
+    // Centre and scale model
     const box = new THREE.Box3().setFromObject(model);
+    const centre = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
 
     const maxDimension = Math.max(size.x, size.y, size.z);
+    const modelPivot = new THREE.Group();
 
-    if (!Number.isFinite(maxDimension) || maxDimension <= 0) {
-      throw new Error("The spoon model has invalid dimensions.");
-    }
+    model.position.sub(centre);
+    modelPivot.add(model);
 
-    // MOVE MODEL CENTRE TO THE PIVOT ORIGIN
-    modelPivot.position.set(
-      -center.x,
-      -center.y,
-      -center.z
-    );
-
-    // SCALE MODEL
-    modelPivot.scale.setScalar(MODEL_SIZE / maxDimension);
-
-    // ADD TO ORIENTATION GROUP
+    modelPivot.scale.setScalar(3.5 / maxDimension);
     orientationGroup.add(modelPivot);
-
-    console.log("Spoon loaded and centred!");
-    console.log("Model dimensions:", size);
   },
-
   undefined,
-
   (error) => {
     console.error("Could not load spoon.glb:", error);
   }
 );
 
-// RANDOM MOVEMENT
-chooseRandomDirection();
+// Mouse dragging
+let dragging = false;
+let previousX = 0;
+let previousY = 0;
 
-// ANIMATION
-const clock = new THREE.Clock();
+renderer.domElement.addEventListener("pointerdown", (event) => {
+  dragging = true;
+  previousX = event.clientX;
+  previousY = event.clientY;
 
+  renderer.domElement.setPointerCapture(event.pointerId);
+});
+
+renderer.domElement.addEventListener("pointermove", (event) => {
+  if (!dragging) return;
+
+  const deltaX = event.clientX - previousX;
+  const deltaY = event.clientY - previousY;
+
+  spinGroup.rotation.y += deltaX * 0.01;
+  spinGroup.rotation.x += deltaY * 0.01;
+
+  previousX = event.clientX;
+  previousY = event.clientY;
+});
+
+renderer.domElement.addEventListener("pointerup", () => {
+  dragging = false;
+});
+
+renderer.domElement.addEventListener("pointercancel", () => {
+  dragging = false;
+});
+
+// Keep still when not dragging
 function animate() {
   requestAnimationFrame(animate);
-
-  const delta = Math.min(clock.getDelta(), 0.05);
-
-  // Choose a new direction periodically
-  changeTimer -= delta;
-
-  if (changeTimer <= 0) {
-    chooseRandomDirection();
-  }
-
-  // Smoothly change spin speed
-  const blend = 1 - Math.exp(-SMOOTHNESS * delta);
-  currentSpeed.lerp(targetSpeed, blend);
-
-  // Random rotation around all three axes
-  spinGroup.rotation.x += currentSpeed.x * delta;
-  spinGroup.rotation.y += currentSpeed.y * delta;
-  spinGroup.rotation.z += currentSpeed.z * delta;
-
   renderer.render(scene, camera);
 }
 
 animate();
 
-// RESIZE
+// Resize
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
-
 </body>
 </html>
