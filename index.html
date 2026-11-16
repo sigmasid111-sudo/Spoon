@@ -2,84 +2,108 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spoon</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spoon</title>
 
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #000;
-      font-family: Arial, sans-serif;
-    }
-
-    canvas {
-      display: block;
-    }
-
-    #controls {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      width: 230px;
-      padding: 18px;
-      color: white;
-      background: rgba(25, 25, 25, 0.85);
-      border: 1px solid #555;
-      border-radius: 12px;
-      z-index: 10;
-    }
-
-    h2 {
-      margin: 0 0 15px;
-      font-size: 19px;
-    }
-
-    .slider {
-      margin-bottom: 15px;
-    }
-
-    .slider label {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 7px;
-      font-size: 13px;
-    }
-
-    input[type="range"] {
-      width: 100%;
-      cursor: pointer;
-    }
-
-    button {
-      width: 100%;
-      padding: 9px;
-      margin-top: 5px;
-      color: white;
-      background: #444;
-      border: 1px solid #777;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #666;
-    }
-  </style>
-
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
-    }
+<style>
+  * {
+    box-sizing: border-box;
   }
-  </script>
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: black;
+    font-family: Arial, sans-serif;
+  }
+
+  canvas {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  #controls {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    width: 260px;
+    padding: 18px;
+    color: white;
+    background: rgba(20, 20, 25, 0.95);
+    border: 2px solid #888;
+    border-radius: 12px;
+    z-index: 9999;
+    pointer-events: auto;
+  }
+
+  #controls h2 {
+    margin: 0 0 18px;
+    font-size: 20px;
+  }
+
+  .slider {
+    margin-bottom: 18px;
+  }
+
+  .slider label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: #55aaff;
+    cursor: pointer;
+  }
+
+  button {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    color: white;
+    background: #333;
+    border: 1px solid #888;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: #555;
+  }
+
+  #toggleControls {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    width: auto;
+    padding: 12px 18px;
+    z-index: 10000;
+    background: #222;
+  }
+
+  #controls.hidden {
+    display: none;
+  }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 
 <body>
 
+<!-- ROTATION CONTROLS -->
 <div id="controls">
   <h2>Spoon Rotation</h2>
 
@@ -88,7 +112,8 @@
       X Rotation
       <span id="xValue">-90°</span>
     </label>
-    <input id="rotationX" type="range" min="-180" max="180" value="-90">
+    <input id="rotationX" type="range"
+           min="-180" max="180" value="-90">
   </div>
 
   <div class="slider">
@@ -96,7 +121,8 @@
       Y Rotation
       <span id="yValue">0°</span>
     </label>
-    <input id="rotationY" type="range" min="-180" max="180" value="0">
+    <input id="rotationY" type="range"
+           min="-180" max="180" value="0">
   </div>
 
   <div class="slider">
@@ -104,11 +130,14 @@
       Z Rotation
       <span id="zValue">90°</span>
     </label>
-    <input id="rotationZ" type="range" min="-180" max="180" value="90">
+    <input id="rotationZ" type="range"
+           min="-180" max="180" value="90">
   </div>
 
-  <button id="resetButton">Reset rotation</button>
+  <button id="resetButton">Reset Rotation</button>
 </div>
+
+<button id="toggleControls">Hide Controls</button>
 
 <script type="module">
 import * as THREE from "three";
@@ -120,7 +149,6 @@ const ROTATION_SPEED = 0.01;
 const MODEL_SIZE = 3.5;
 const CAMERA_DISTANCE = 8;
 
-// INITIAL ROTATION
 const DEFAULT_X = -90;
 const DEFAULT_Y = 0;
 const DEFAULT_Z = 90;
@@ -147,15 +175,13 @@ const renderer = new THREE.WebGLRenderer({
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.appendChild(renderer.domElement);
 
-// REFLECTIONS
+// ENVIRONMENT REFLECTIONS
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 const environment = new RoomEnvironment();
 
@@ -212,19 +238,31 @@ sliderX.addEventListener("input", updateRotation);
 sliderY.addEventListener("input", updateRotation);
 sliderZ.addEventListener("input", updateRotation);
 
-// RESET BUTTON
+// RESET
 document.getElementById("resetButton").addEventListener("click", () => {
   sliderX.value = DEFAULT_X;
   sliderY.value = DEFAULT_Y;
   sliderZ.value = DEFAULT_Z;
-
   updateRotation();
 });
 
-// INITIALISE SLIDERS
+// SHOW / HIDE
+const controls = document.getElementById("controls");
+const toggleButton = document.getElementById("toggleControls");
+
+toggleButton.addEventListener("click", () => {
+  controls.classList.toggle("hidden");
+
+  toggleButton.textContent =
+    controls.classList.contains("hidden")
+      ? "Show Controls"
+      : "Hide Controls";
+});
+
+// INITIAL VALUES
 updateRotation();
 
-// LOAD SPOON
+// LOAD MODEL
 const loader = new GLTFLoader();
 
 loader.load(
@@ -248,24 +286,23 @@ loader.load(
       }
     });
 
-    // APPLY SLIDER ROTATION
+    // APPLY STARTING ROTATION
     model.rotation.set(
       THREE.MathUtils.degToRad(Number(sliderX.value)),
       THREE.MathUtils.degToRad(Number(sliderY.value)),
       THREE.MathUtils.degToRad(Number(sliderZ.value))
     );
 
-    // SCALE MODEL
+    // SCALE
     let box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
 
     const maxDimension = Math.max(size.x, size.y, size.z);
     model.scale.setScalar(MODEL_SIZE / maxDimension);
 
-    // CENTRE MODEL
+    // CENTRE
     box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(new THREE.Vector3());
-
     model.position.sub(center);
 
     spoonModel = model;
@@ -277,7 +314,7 @@ loader.load(
   undefined,
 
   (error) => {
-    console.error("Could not load spoon.glb:", error);
+    console.error("Spoon loading error:", error);
   }
 );
 
@@ -296,7 +333,6 @@ animate();
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
