@@ -103,6 +103,7 @@ scene.add(spinGroup);
 
 // ORIENTATION GROUP
 const orientationGroup = new THREE.Group();
+
 orientationGroup.rotation.set(
   THREE.MathUtils.degToRad(SPOON_ROTATION_X),
   THREE.MathUtils.degToRad(SPOON_ROTATION_Y),
@@ -136,47 +137,30 @@ loader.load(
       }
     });
 
-    // PLACE MODEL IN A CENTRING GROUP
+    // CREATE CENTRED HOLDER
     const modelHolder = new THREE.Group();
     modelHolder.add(model);
 
-    // MEASURE MODEL
-    modelHolder.updateMatrixWorld(true);
+    // MEASURE MODEL BEFORE ROTATION
+    model.updateMatrixWorld(true);
 
-    let box = new THREE.Box3().setFromObject(modelHolder);
+    const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
-
-    const maxDimension = Math.max(size.x, size.y, size.z);
-
-    // SCALE
-    modelHolder.scale.setScalar(MODEL_SIZE / maxDimension);
-
-    // RECALCULATE BOUNDS AFTER SCALING
-    modelHolder.updateMatrixWorld(true);
-
-    box = new THREE.Box3().setFromObject(modelHolder);
-
-    // CENTRE MODEL
     const center = box.getCenter(new THREE.Vector3());
 
+    // CENTRE MODEL AT ORIGIN
     model.position.sub(center);
 
-    // ADD TO SCENE
+    // SCALE MODEL
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    modelHolder.scale.setScalar(MODEL_SIZE / maxDimension);
+
+    // ADD MODEL
     orientationGroup.add(modelHolder);
 
-    // Recalculate and correct centring after adding
-    modelHolder.updateMatrixWorld(true);
-    box = new THREE.Box3().setFromObject(modelHolder);
-
-    const finalCenter = box.getCenter(new THREE.Vector3());
-    modelHolder.position.sub(finalCenter);
-
     console.log("Spoon loaded!");
-    console.log("Starting rotation:", 
-      SPOON_ROTATION_X,
-      SPOON_ROTATION_Y,
-      SPOON_ROTATION_Z
-    );
+    console.log("Starting rotation: -90, -90, 90");
+    console.log("Spinning around Z axis");
   },
 
   undefined,
@@ -190,8 +174,8 @@ loader.load(
 function animate() {
   requestAnimationFrame(animate);
 
-  // Spin around vertical axis
-  spinGroup.rotation.y += ROTATION_SPEED;
+  // SPIN AROUND Z AXIS
+  spinGroup.rotation.z += ROTATION_SPEED;
 
   renderer.render(scene, camera);
 }
